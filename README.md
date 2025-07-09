@@ -15,7 +15,7 @@ The official CLI to scaffold modern fullstack apps using the **4n Stack**.
 | Tailwind CSS   | Utility-first CSS                    |
 | TypeScript     | Safer JavaScript                    |
 | ShadCN UI      | Beautiful components out of the box |
-| Ultracite      | Biome + Prettier + Linting magic    |
+| Biome      | Format, lint, and more in a fraction of a second.   |
 | Drizzle (opt)  | Type-safe SQL ORM                   |
 | Better Auth (opt)| Lightweight authentication         |
 
