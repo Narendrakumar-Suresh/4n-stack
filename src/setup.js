@@ -5,31 +5,62 @@ import prompts from 'prompts';
 import chalk from 'chalk';
 import ora from 'ora';
 import { execa } from 'execa';
+import { exit } from 'process';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const templateDir = path.join(__dirname, '..', 'templates');
 const extrasDir = path.join(templateDir, 'addons');
 
-export async function main() {
-  console.log(chalk.bold.green('\n✨ Welcome to create-4n-app CLI'));
+export class SetupError extends Error {
+  constructor(message, code = 1) {
+    super(message);
+    this.name = 'SetupError';
+    this.code = code;
+  }
+}
 
-  const responses = await prompts([
+const handleInterrupt = () => {
+  console.log(chalk.yellow('\nOperation cancelled by user. Exiting...'));
+  exit(0);
+};
+
+export async function main() {
+  // Handle process interruptions
+  process.on('SIGINT', handleInterrupt);
+  
+  try {
+    console.log(chalk.bold.green('\n✨ Welcome to create-4n-app CLI'));
+
+    const responses = await prompts([
     {
       type: 'text',
       name: 'projectName',
-      message: 'Project name:'
+      message: 'Project name:',
+      validate: value => {
+        if (!value || value.trim() === '') {
+          return 'Project name cannot be empty';
+        }
+        if (!/^[a-z0-9-]+$/.test(value)) {
+          return 'Project name can only contain lowercase letters, numbers, and hyphens';
+        }
+        return true;
+      }
     },
     {
-      type: 'confirm',
+      type: 'toggle',
       name: 'wantBetterAuth',
-      message: 'Include Better Auth?',
-      initial: true
+      message: 'Would you like to use Better Auth?',
+      initial: true,
+      active: 'Yes',
+      inactive: 'No'
     },
     {
-      type: 'confirm',
+      type: 'toggle',
       name: 'wantDrizzle',
-      message: 'Include Drizzle (DB)?',
-      initial: true
+      message: 'Would you like to use Drizzle (DB)?',
+      initial: true,
+      active: 'Yes',
+      inactive: 'No'
     },
     {
       type: 'select',
@@ -44,11 +75,40 @@ export async function main() {
     }
   ]);
 
-  const { projectName, wantBetterAuth, wantDrizzle, pm } = responses;
-  const targetDir = path.join(process.cwd(), projectName);
-  const spinner = ora('Scaffolding project...').start();
+  if (Object.keys(responses).length === 0) {
+    throw new SetupError('No responses received. Setup aborted.');
+  }
 
-  try {
+  const { projectName, wantBetterAuth, wantDrizzle, pm } = responses;
+  
+  // Validate package manager
+  const validPackageManagers = ['pnpm', 'npm', 'yarn', 'bun'];
+  if (!validPackageManagers.includes(pm)) {
+    throw new SetupError(`Invalid package manager: ${pm}`);
+  }
+
+  const targetDir = path.join(process.cwd(), projectName);
+  
+  // Check if directory already exists
+  if (fs.existsSync(targetDir)) {
+    const { overwrite } = await prompts({
+      type: 'confirm',
+      name: 'overwrite',
+      message: `Directory ${projectName} already exists. Overwrite?`,
+      initial: false
+    });
+    
+    if (!overwrite) {
+      throw new SetupError('Operation cancelled by user.');
+    }
+    
+    // Remove existing directory if exists and user confirms
+    await fs.remove(targetDir);
+  }
+
+    const spinner = ora('Scaffolding project...').start();
+
+    try {
     await fs.copy(path.join(templateDir, 'base'), targetDir);
 
     // Auth + DB logic
@@ -69,9 +129,33 @@ export async function main() {
     await execa(pm, installCmd, { cwd: targetDir, stdio: 'inherit' });
 
     console.log(chalk.green(`\n✅ Done! CD into your project with \`cd ${projectName}\` and start building!`));
+    // Project setup completed successfully
+    } catch (err) {
+      spinner.fail('Setup failed.');
+      if (err instanceof SetupError) {
+        console.error(chalk.red(`\n❌ ${err.message}`));
+      } else {
+        console.error(chalk.red(`\n❌ An unexpected error occurred:`));
+        console.error(chalk.gray(err.stack || err.message));
+      }
+      
+      // Clean up on failure
+      try {
+        if (fs.existsSync(targetDir)) {
+          await fs.remove(targetDir);
+        }
+      } catch (cleanupErr) {
+        console.error(chalk.yellow('\n⚠️  Failed to clean up temporary files:', cleanupErr.message));
+      }
+      
+      process.exit(1);
+    } finally {
+      // Clean up event listeners
+      process.off('SIGINT', handleInterrupt);
+    }
   } catch (err) {
-    spinner.fail('Setup failed.');
-    console.error(err);
+    console.error(chalk.red(`\n❌ Setup failed: ${err.message}`));
+    process.exit(1);
   }
 }
 
