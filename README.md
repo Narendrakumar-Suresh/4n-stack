@@ -2,9 +2,6 @@
 
 The official CLI to scaffold modern fullstack apps using the **4n Stack**.
 
-> [!WARNING]  
-> This is in Beta. When this removed you can use it for prod.👍🏼
-
 ---
 
 ## 📦 What's in the stack?

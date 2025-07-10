@@ -1,6 +1,6 @@
 {
   "name": "create-4n-app",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Interactive CLI to scaffold 4n-stack projects",
   "bin": {
     "create-4n-app": "./bin/index.js"
